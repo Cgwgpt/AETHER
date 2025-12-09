@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  aether:
+    build: .
+    container_name: aether
+    ports:
+      - "7860:7860"
+    volumes:
+      # Mount current directory to /app to provide models and access output
+      # Note: The binary is in /usr/local/bin/sd, so it won't be hidden by this mount
+      - .:/app
+    environment:
+      # Ensure Gradio listens on all interfaces
+      - GRADIO_SERVER_NAME=0.0.0.0
+    restart: unless-stopped

@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+env
+
+# Build artifacts
+build/
+stable-diffusion.cpp/build/
+
+# Models (Large files)
+*.gguf
+*.safetensors
+*.ckpt
+*.pth
+output/
+assets/
+
+# IDE
+.vscode
+.idea
+.DS_Store

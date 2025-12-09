@@ -1,0 +1,60 @@
+# Stage 1: Build C++ backend
+# AETHER Dockerfile
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/stable-diffusion.cpp
+
+# Copy source code
+COPY stable-diffusion.cpp/ .
+
+# Build sd binary
+RUN cmake . -B build && \
+    cmake --build build --config Release --parallel $(nproc)
+
+# Stage 2: Runtime environment
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+# Set environment variable for binary path (used by gradio_app.py)
+ENV SD_CPP_BINARY_PATH=/usr/local/bin/sd
+
+# Install Python and runtime dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy sd binary from builder
+COPY --from=builder /app/stable-diffusion.cpp/build/bin/sd /usr/local/bin/sd
+
+# Install Python dependencies
+RUN pip3 install --no-cache-dir \
+    gradio \
+    torch \
+    transformers \
+    safetensors \
+    loguru \
+    pillow \
+    accelerate
+
+# AETHER application files
+COPY gradio_app.py .
+
+# Expose Gradio port
+EXPOSE 7860
+
+# Entrypoint
+CMD ["python3", "gradio_app.py"]
