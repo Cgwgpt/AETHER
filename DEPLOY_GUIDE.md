@@ -5,16 +5,23 @@
 ### 使用修复版脚本（解决所有已知问题）
 
 ```bash
-# 1. 使用修复版部署脚本
+# 1. 使用修复版部署脚本（自动选择最佳构建方式）
 chmod +x deploy_to_cloud_run_fixed.sh
 ./deploy_to_cloud_run_fixed.sh
 
-# 2. GPU版本（推荐生产环境）
+# 2. GPU版本（推荐生产环境，速度提升20-50倍）
 USE_GPU=true ./deploy_to_cloud_run_fixed.sh
 
-# 3. 如果本地空间不足
+# 3. 如果本地空间不足，使用Cloud Build
 USE_CLOUD_BUILD=true ./deploy_to_cloud_run_fixed.sh
 ```
+
+### ✨ 最新修复（v2.0）
+
+- **🔧 解决CMakeLists.txt问题**: 自动检测预构建二进制文件
+- **⚡ 智能构建选择**: 优先使用轻量级Dockerfile.simple
+- **🛠️ 完整构建备选**: 如需重新编译使用Dockerfile.cloud-run
+- **✅ 构建验证**: 内置测试脚本确保环境正确
 
 ## 解决 Docker 构建空间不足问题
 
