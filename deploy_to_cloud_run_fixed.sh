@@ -142,8 +142,8 @@ echo_info "使用专用Dockerfile: Dockerfile.cloud-run"
 
 # 选择Dockerfile
 if [ -f "stable-diffusion.cpp/build/bin/sd" ]; then
-    echo_info "发现预构建的二进制文件，使用简化Dockerfile"
-    DOCKERFILE="Dockerfile.simple"
+    echo_info "发现预构建的二进制文件，使用健壮版Dockerfile"
+    DOCKERFILE="Dockerfile.robust"
 else
     echo_info "未发现预构建二进制文件，使用完整构建Dockerfile"
     DOCKERFILE="Dockerfile.cloud-run"

@@ -1,4 +1,4 @@
-# AETHER 简化版 Dockerfile - 使用预构建的二进制文件
+# AETHER 健壮版 Dockerfile - 处理所有可能的文件情况
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -34,11 +34,12 @@ RUN pip3 install --no-cache-dir \
     pillow \
     accelerate
 
-# Copy application files
+# Copy all necessary files in one go to avoid missing file issues
 COPY gradio_app_fixed.py ./gradio_app.py
-
-# Copy src directory
 COPY src/ ./src/
+COPY inference.py ./
+COPY download_vae.py ./
+COPY download_vae_alternative.py ./
 
 # Create models directory for GCS mount
 RUN mkdir -p /app/models /app/output

@@ -81,10 +81,9 @@ RUN pip3 install --no-cache-dir \
 
 # Copy application files
 COPY gradio_app_fixed.py ./gradio_app.py
-COPY src/ ./src/ 2>/dev/null || echo "No src directory found"
 
-# Copy other Python files if they exist
-COPY *.py ./ 2>/dev/null || echo "No additional Python files found"
+# Copy src directory
+COPY src/ ./src/
 
 # Create models directory for GCS mount
 RUN mkdir -p /app/models /app/output
