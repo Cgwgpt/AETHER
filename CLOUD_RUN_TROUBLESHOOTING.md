@@ -95,15 +95,21 @@ gcloud run deploy aether --image=IMAGE_URI --region=us-central1
 
 ## 📋 部署前检查清单
 
+### 🔍 自动验证（推荐）
+```bash
+# 运行自动验证脚本
+./validate_deployment.sh
+```
+
 ### 必需文件
-- [ ] `stable-diffusion.cpp/` 目录存在
-- [ ] `gradio_app.py` 或 `gradio_app_fixed.py`
-- [ ] `Dockerfile.optimized` 或 `Dockerfile.fixed`
-- [ ] `.dockerignore` 文件正确配置
+- [ ] `stable-diffusion.cpp/build/bin/sd` (预构建二进制)
+- [ ] `gradio_app_fixed.py` (修复版应用)
+- [ ] `Dockerfile.robust` (健壮版Dockerfile)
+- [ ] `src/` 目录存在
 
 ### 环境配置
 - [ ] gcloud CLI已安装并认证
-- [ ] Docker已安装并运行
+- [ ] Docker已安装并运行（或使用Cloud Build）
 - [ ] 项目ID已设置: `gcloud config set project YOUR_PROJECT_ID`
 - [ ] 必要的API已启用
 
