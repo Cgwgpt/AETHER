@@ -11,11 +11,16 @@ import gradio as gr
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 配置路径（使用绝对路径）
-# 优先使用环境变量（适配Docker），否则使用默认构建路径
+# 优先使用环境变量（适配Docker和Cloud Run），否则使用默认构建路径
 SD_CPP_BIN = os.environ.get("SD_CPP_BINARY_PATH", os.path.join(BASE_DIR, "stable-diffusion.cpp/build/bin/sd"))
-MODEL_FILE = os.path.join(BASE_DIR, "z_image_turbo-Q4_K_M.gguf")
-VAE_FILE = os.path.join(BASE_DIR, "ae.safetensors")
-LLM_FILE = os.path.join(BASE_DIR, "Qwen3-4B-Q4_K_M.gguf")
+
+# 模型路径配置 - 支持 Cloud Run GCS 挂载
+MODEL_PATH = os.environ.get("MODEL_PATH", BASE_DIR)
+MODEL_FILE = os.path.join(MODEL_PATH, "z_image_turbo-Q4_K_M.gguf")
+VAE_FILE = os.path.join(MODEL_PATH, "ae.safetensors")
+LLM_FILE = os.path.join(MODEL_PATH, "Qwen3-4B-Q4_K_M.gguf")
+
+# 输出目录
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 # 示例提示词

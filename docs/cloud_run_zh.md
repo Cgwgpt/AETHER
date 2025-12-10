@@ -29,8 +29,24 @@
 
 ## 2. 构建并推送 Docker 镜像
 
+### 解决构建空间不足问题
+
+如果遇到 Docker 构建空间不足，请先清理：
+
+```bash
+# 清理 Docker 空间
+docker system prune -a --volumes
+docker builder prune -a
+
+# 查看空间使用情况
+docker system df
+```
+
+### 构建镜像
+
 1.  **配置 Artifact Registry**:
     ```bash
+    export PROJECT_ID=$(gcloud config get-value project)
     export REPO_NAME=z-image-repo
     gcloud artifacts repositories create $REPO_NAME --repository-format=docker \
         --location=$REGION --description="Z-Image Docker Repository"
@@ -42,13 +58,26 @@
     ```bash
     export IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/z-image:latest
     
-    # 构建 linux/amd64 架构镜像 (Cloud Run 要求)
-    # 注意: 如果部署 GPU 版本，请使用 Dockerfile.gpu
+    # 使用优化的 Dockerfile (不包含大文件)
+    docker build --platform linux/amd64 -f Dockerfile.optimized -t $IMAGE_URI .
+    
+    # 如果需要 GPU 版本，使用 Dockerfile.gpu
     # docker build --platform linux/amd64 -f Dockerfile.gpu -t $IMAGE_URI .
-    docker build --platform linux/amd64 -t $IMAGE_URI .
     
     docker push $IMAGE_URI
     ```
+
+### 替代方案：使用 Cloud Build
+
+如果本地空间仍然不足，可以使用 Google Cloud Build：
+
+```bash
+# 提交代码到 Cloud Build 进行构建
+gcloud builds submit --tag $IMAGE_URI .
+
+# 或者使用 GPU Dockerfile
+# gcloud builds submit --tag $IMAGE_URI --dockerfile Dockerfile.gpu .
+```
 
 ## 3. 部署到 Cloud Run
 
