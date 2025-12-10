@@ -53,11 +53,22 @@ gcloud services enable artifactregistry.googleapis.com
 
 echo_success "预检查完成"
 
-# 2. 清理Docker空间
-echo_info "步骤 2/8: 清理Docker空间"
+# 2. 清理Docker空间和准备子模块
+echo_info "步骤 2/8: 清理Docker空间和准备子模块"
 docker system prune -f --volumes
 docker builder prune -f
-echo_success "Docker空间清理完成"
+
+# 确保子模块已初始化
+if [ -d "stable-diffusion.cpp/.git" ]; then
+    echo_info "初始化stable-diffusion.cpp子模块..."
+    cd stable-diffusion.cpp
+    git submodule update --init --recursive
+    cd ..
+else
+    echo_warning "stable-diffusion.cpp不是git仓库，跳过子模块初始化"
+fi
+
+echo_success "Docker空间清理和子模块准备完成"
 
 # 3. 创建GCS存储桶
 echo_info "步骤 3/8: 创建GCS存储桶"
@@ -126,79 +137,25 @@ export IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/aether:latest
 echo_info "步骤 7/8: 构建Docker镜像"
 echo_info "镜像URI: $IMAGE_URI"
 
-# 创建修复版Dockerfile
-cat > Dockerfile.fixed << 'EOF'
-# AETHER 修复版 Dockerfile
-FROM ubuntu:22.04 AS builder
+# 使用专用的Cloud Run Dockerfile
+echo_info "使用专用Dockerfile: Dockerfile.cloud-run"
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app/stable-diffusion.cpp
-
-# Copy source code
-COPY stable-diffusion.cpp/ .
-
-# Build sd binary
-RUN cmake . -B build && \
-    cmake --build build --config Release --parallel $(nproc)
-
-# Stage 2: Runtime environment
-FROM ubuntu:22.04
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV SD_CPP_BINARY_PATH=/usr/local/bin/sd
-ENV MODEL_PATH=/app/models
-
-# Install Python and runtime dependencies
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Copy sd binary from builder
-COPY --from=builder /app/stable-diffusion.cpp/build/bin/sd /usr/local/bin/sd
-
-# Copy requirements and install Python dependencies
-COPY requirements_fixed.txt .
-RUN pip3 install --no-cache-dir -r requirements_fixed.txt
-
-# Copy application files
-COPY gradio_app.py .
-COPY src/ ./src/
-COPY *.py .
-
-# Create models directory for GCS mount
-RUN mkdir -p /app/models
-
-# Expose Gradio port
-EXPOSE 7860
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:7860/ || exit 1
-
-# Entrypoint
-CMD ["python3", "gradio_app.py"]
-EOF
+# 选择Dockerfile
+if [ -f "stable-diffusion.cpp/build/bin/sd" ]; then
+    echo_info "发现预构建的二进制文件，使用简化Dockerfile"
+    DOCKERFILE="Dockerfile.simple"
+else
+    echo_info "未发现预构建二进制文件，使用完整构建Dockerfile"
+    DOCKERFILE="Dockerfile.cloud-run"
+fi
 
 # 检查是否使用Cloud Build
 if [[ "${USE_CLOUD_BUILD:-false}" == "true" ]]; then
     echo_info "使用Cloud Build构建镜像..."
-    gcloud builds submit --tag $IMAGE_URI --dockerfile Dockerfile.fixed .
+    gcloud builds submit --tag $IMAGE_URI --dockerfile $DOCKERFILE .
 else
     echo_info "本地构建镜像..."
-    docker build --platform linux/amd64 -f Dockerfile.fixed -t $IMAGE_URI .
+    docker build --platform linux/amd64 -f $DOCKERFILE -t $IMAGE_URI .
     docker push $IMAGE_URI
 fi
 

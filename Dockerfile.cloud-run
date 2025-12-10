@@ -1,0 +1,100 @@
+# AETHER Cloud Run 专用 Dockerfile
+# 解决子模块和构建问题的完整方案
+
+# Stage 1: Build C++ backend
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy stable-diffusion.cpp source code (including all subdirectories)
+COPY stable-diffusion.cpp/ ./stable-diffusion.cpp/
+
+# Change to stable-diffusion.cpp directory and build
+WORKDIR /app/stable-diffusion.cpp
+
+# Debug: List files to verify copy worked
+RUN echo "=== Checking copied files ===" && \
+    ls -la && \
+    echo "=== Checking for CMakeLists.txt ===" && \
+    ls -la CMakeLists.txt && \
+    echo "=== Checking ggml directory ===" && \
+    ls -la ggml/ && \
+    echo "=== Checking if we can use existing binary ===" && \
+    ls -la build/bin/ 2>/dev/null || echo "No existing build found"
+
+# Build sd binary
+RUN cmake . -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DSD_CUBLAS=OFF \
+    -DSD_METAL=OFF \
+    -DSD_FLASH_ATTN=ON && \
+    cmake --build build --config Release --parallel $(nproc)
+
+# Verify binary was built
+RUN ls -la build/bin/ && \
+    file build/bin/sd
+
+# Stage 2: Runtime environment
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV SD_CPP_BINARY_PATH=/usr/local/bin/sd
+ENV MODEL_PATH=/app/models
+
+# Install Python and runtime dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy sd binary from builder
+COPY --from=builder /app/stable-diffusion.cpp/build/bin/sd /usr/local/bin/sd
+
+# Verify binary is executable
+RUN chmod +x /usr/local/bin/sd && \
+    /usr/local/bin/sd --help || echo "Binary copied successfully"
+
+# Install Python dependencies with fixed versions
+RUN pip3 install --no-cache-dir \
+    gradio==4.44.1 \
+    torch>=2.5.0 \
+    transformers>=4.51.0 \
+    safetensors \
+    loguru \
+    pillow \
+    accelerate
+
+# Copy application files
+COPY gradio_app_fixed.py ./gradio_app.py
+COPY src/ ./src/ 2>/dev/null || echo "No src directory found"
+
+# Copy other Python files if they exist
+COPY *.py ./ 2>/dev/null || echo "No additional Python files found"
+
+# Create models directory for GCS mount
+RUN mkdir -p /app/models /app/output
+
+# Expose Gradio port
+EXPOSE 7860
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7860/ || exit 1
+
+# Entrypoint
+CMD ["python3", "gradio_app.py"]

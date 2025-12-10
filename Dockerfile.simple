@@ -1,0 +1,55 @@
+# AETHER 简化版 Dockerfile - 使用预构建的二进制文件
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV SD_CPP_BINARY_PATH=/usr/local/bin/sd
+ENV MODEL_PATH=/app/models
+
+# Install Python and runtime dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy pre-built sd binary directly
+COPY stable-diffusion.cpp/build/bin/sd /usr/local/bin/sd
+
+# Verify binary is executable
+RUN chmod +x /usr/local/bin/sd && \
+    echo "Binary copied successfully" && \
+    ls -la /usr/local/bin/sd
+
+# Install Python dependencies with fixed versions
+RUN pip3 install --no-cache-dir \
+    gradio==4.44.1 \
+    torch>=2.5.0 \
+    transformers>=4.51.0 \
+    safetensors \
+    loguru \
+    pillow \
+    accelerate
+
+# Copy application files
+COPY gradio_app_fixed.py ./gradio_app.py
+
+# Copy other Python files if they exist
+COPY src/ ./src/ 2>/dev/null || echo "No src directory found"
+COPY *.py ./ 2>/dev/null || echo "No additional Python files found"
+
+# Create models directory for GCS mount
+RUN mkdir -p /app/models /app/output
+
+# Expose Gradio port
+EXPOSE 7860
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:7860/ || exit 1
+
+# Entrypoint
+CMD ["python3", "gradio_app.py"]
