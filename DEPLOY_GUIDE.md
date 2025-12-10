@@ -1,5 +1,21 @@
 # AETHER Cloud Run 快速部署指南
 
+## 🎯 百分百成功部署方法（推荐）
+
+### 使用修复版脚本（解决所有已知问题）
+
+```bash
+# 1. 使用修复版部署脚本
+chmod +x deploy_to_cloud_run_fixed.sh
+./deploy_to_cloud_run_fixed.sh
+
+# 2. GPU版本（推荐生产环境）
+USE_GPU=true ./deploy_to_cloud_run_fixed.sh
+
+# 3. 如果本地空间不足
+USE_CLOUD_BUILD=true ./deploy_to_cloud_run_fixed.sh
+```
+
 ## 解决 Docker 构建空间不足问题
 
 ### 方案 1: 本地构建（推荐）
@@ -62,32 +78,40 @@ export USE_GPU=true
 
 ## 故障排除
 
-### 1. Docker 空间不足
+### 🔥 常见问题快速修复
+
+#### Gradio兼容性错误
 ```bash
-# 查看空间使用
-docker system df
-
-# 清理所有未使用的资源
-docker system prune -a --volumes
-
-# 删除所有镜像重新开始
-docker rmi $(docker images -q)
+# 使用修复版应用
+cp gradio_app_fixed.py gradio_app.py
 ```
 
-### 2. 模型文件太大
-- 确保 `.dockerignore` 排除了 `*.gguf` 和 `*.safetensors`
-- 使用 `Dockerfile.optimized` 而不是原始 `Dockerfile`
-- 考虑使用 Cloud Build
+#### Docker空间不足
+```bash
+# 清理Docker空间
+docker system prune -a --volumes
+docker builder prune -a
 
-### 3. 推送失败
+# 使用Cloud Build
+USE_CLOUD_BUILD=true ./deploy_to_cloud_run_fixed.sh
+```
+
+#### 模型文件过大
+```bash
+# 确保.dockerignore正确配置
+echo "*.gguf" >> .dockerignore
+echo "*.safetensors" >> .dockerignore
+```
+
+#### 权限问题
 ```bash
 # 重新认证
 gcloud auth login
 gcloud auth configure-docker us-central1-docker.pkg.dev
-
-# 检查项目ID
-gcloud config get-value project
 ```
+
+### 详细故障排除
+查看完整的故障排除指南: `CLOUD_RUN_TROUBLESHOOTING.md`
 
 ## 成本估算
 
