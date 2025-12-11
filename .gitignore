@@ -222,3 +222,6 @@ ckpts/
 
 # Output directory
 output/
+
+# Stable Diffusion C++ subproject (external dependency)
+stable-diffusion.cpp/
