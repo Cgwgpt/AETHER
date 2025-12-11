@@ -53,22 +53,36 @@ gcloud services enable artifactregistry.googleapis.com
 
 echo_success "预检查完成"
 
-# 2. 清理Docker空间和准备子模块
-echo_info "步骤 2/8: 清理Docker空间和准备子模块"
-docker system prune -f --volumes
-docker builder prune -f
+# 2. 检查构建环境
+echo_info "步骤 2/8: 检查构建环境"
 
-# 确保子模块已初始化
-if [ -d "stable-diffusion.cpp/.git" ]; then
-    echo_info "初始化stable-diffusion.cpp子模块..."
-    cd stable-diffusion.cpp
-    git submodule update --init --recursive
-    cd ..
+# 选择最佳构建策略
+if [ -f "stable-diffusion.cpp/build/bin/sd" ]; then
+    echo_info "✅ 发现预构建二进制文件，将使用快速构建模式"
+    DOCKERFILE="Dockerfile.robust"
+    BUILD_MODE="预构建二进制"
 else
-    echo_warning "stable-diffusion.cpp不是git仓库，跳过子模块初始化"
+    echo_info "⚠️ 未发现预构建二进制文件，将使用完整构建模式"
+    DOCKERFILE="Dockerfile.cloud-run"
+    BUILD_MODE="完整构建"
+    
+    # 只有在完整构建模式下才需要子模块
+    if [ -d "stable-diffusion.cpp/.git" ]; then
+        echo_info "初始化stable-diffusion.cpp子模块..."
+        (cd stable-diffusion.cpp && git submodule update --init --recursive)
+    else
+        echo_warning "stable-diffusion.cpp不是git仓库，跳过子模块初始化"
+    fi
 fi
 
-echo_success "Docker空间清理和子模块准备完成"
+# 只有在本地构建时才清理Docker空间
+if [[ "${USE_CLOUD_BUILD:-true}" != "true" ]]; then
+    echo_info "本地构建模式，清理Docker空间..."
+    docker system prune -f --volumes 2>/dev/null || echo "Docker清理跳过"
+    docker builder prune -f 2>/dev/null || echo "Docker builder清理跳过"
+fi
+
+echo_success "构建环境检查完成 - 模式: $BUILD_MODE"
 
 # 3. 创建GCS存储桶
 echo_info "步骤 3/8: 创建GCS存储桶"
@@ -117,19 +131,20 @@ fi
 gcloud auth configure-docker $REGION-docker.pkg.dev
 echo_success "Docker认证配置完成"
 
-# 6. 修复Gradio兼容性问题
-echo_info "步骤 6/8: 修复Gradio兼容性问题"
-cat > requirements_fixed.txt << 'EOF'
-gradio==4.44.1
-torch>=2.5.0
-transformers>=4.51.0
-safetensors
-loguru
-pillow
-accelerate
-EOF
+# 6. 验证构建文件
+echo_info "步骤 6/8: 验证构建文件"
 
-echo_success "依赖文件已更新"
+if [ ! -f "$DOCKERFILE" ]; then
+    echo_error "Dockerfile不存在: $DOCKERFILE"
+    exit 1
+fi
+
+if [ ! -f "gradio_app_fixed.py" ]; then
+    echo_error "应用文件不存在: gradio_app_fixed.py"
+    exit 1
+fi
+
+echo_success "构建文件验证完成"
 
 # 7. 构建并推送镜像
 export IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/aether:latest
@@ -137,17 +152,8 @@ export IMAGE_URI=$REGION-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/aether:latest
 echo_info "步骤 7/8: 构建Docker镜像"
 echo_info "镜像URI: $IMAGE_URI"
 
-# 使用专用的Cloud Run Dockerfile
-echo_info "使用专用Dockerfile: Dockerfile.cloud-run"
-
-# 选择Dockerfile
-if [ -f "stable-diffusion.cpp/build/bin/sd" ]; then
-    echo_info "发现预构建的二进制文件，使用健壮版Dockerfile"
-    DOCKERFILE="Dockerfile.robust"
-else
-    echo_info "未发现预构建二进制文件，使用完整构建Dockerfile"
-    DOCKERFILE="Dockerfile.cloud-run"
-fi
+# 使用之前选择的Dockerfile
+echo_info "使用Dockerfile: $DOCKERFILE ($BUILD_MODE)"
 
 # 检查是否使用Cloud Build
 # 根据经验教训，默认使用Cloud Build避免空间问题
@@ -164,12 +170,31 @@ steps:
   args: ['push', '$IMAGE_URI']
 EOF
     
-    gcloud builds submit --config cloudbuild.yaml .
+    if gcloud builds submit --config cloudbuild.yaml .; then
+        echo_success "Cloud Build构建成功"
+    else
+        echo_error "Cloud Build构建失败"
+        rm -f cloudbuild.yaml
+        exit 1
+    fi
     rm -f cloudbuild.yaml
 else
-    echo_info "本地构建镜像（可能遇到磁盘空间问题）..."
-    docker build --platform linux/amd64 -f $DOCKERFILE -t $IMAGE_URI .
-    docker push $IMAGE_URI
+    echo_warning "本地构建镜像（可能遇到磁盘空间问题）..."
+    echo_warning "推荐使用: USE_CLOUD_BUILD=true ./deploy_to_cloud_run_fixed.sh"
+    
+    if docker build --platform linux/amd64 -f $DOCKERFILE -t $IMAGE_URI .; then
+        echo_success "本地构建成功"
+        if docker push $IMAGE_URI; then
+            echo_success "镜像推送成功"
+        else
+            echo_error "镜像推送失败"
+            exit 1
+        fi
+    else
+        echo_error "本地构建失败，建议使用Cloud Build"
+        echo_info "尝试运行: USE_CLOUD_BUILD=true ./deploy_to_cloud_run_fixed.sh"
+        exit 1
+    fi
 fi
 
 echo_success "镜像构建并推送成功"

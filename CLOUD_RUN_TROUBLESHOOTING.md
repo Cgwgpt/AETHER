@@ -215,6 +215,18 @@ gcloud run services describe aether --region=us-central1
 # Cloud Run > aether > 指标
 ```
 
+## 📚 深度学习：部署经验教训
+
+详细的部署过程分析、问题根因和经验教训，请参考：
+**[DEPLOYMENT_LESSONS_LEARNED.md](./DEPLOYMENT_LESSONS_LEARNED.md)**
+
+包含内容：
+- 🔍 核心问题深度分析
+- ⏱️ 耗时原因总结  
+- 📚 6大经验教训
+- 🎯 最佳实践指南
+- 🔧 故障排除快速参考
+
 ## 💡 最佳实践
 
 1. **使用GPU版本**: 生产环境推荐使用GPU，速度提升20-50倍
