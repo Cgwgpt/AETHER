@@ -150,11 +150,24 @@ else
 fi
 
 # 检查是否使用Cloud Build
-if [[ "${USE_CLOUD_BUILD:-false}" == "true" ]]; then
-    echo_info "使用Cloud Build构建镜像..."
-    gcloud builds submit --tag $IMAGE_URI --dockerfile $DOCKERFILE .
+# 根据经验教训，默认使用Cloud Build避免空间问题
+if [[ "${USE_CLOUD_BUILD:-true}" == "true" ]]; then
+    echo_info "使用Cloud Build构建镜像（推荐，避免磁盘空间问题）..."
+    
+    # Cloud Build需要使用cloudbuild.yaml或默认Dockerfile
+    # 创建临时的cloudbuild.yaml来指定自定义Dockerfile
+    cat > cloudbuild.yaml << EOF
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-f', '$DOCKERFILE', '-t', '$IMAGE_URI', '.']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', '$IMAGE_URI']
+EOF
+    
+    gcloud builds submit --config cloudbuild.yaml .
+    rm -f cloudbuild.yaml
 else
-    echo_info "本地构建镜像..."
+    echo_info "本地构建镜像（可能遇到磁盘空间问题）..."
     docker build --platform linux/amd64 -f $DOCKERFILE -t $IMAGE_URI .
     docker push $IMAGE_URI
 fi
